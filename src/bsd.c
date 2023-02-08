@@ -145,12 +145,19 @@ int bsd_udp_packet_buffer_local_ip(void *msgvec, int index, char *ip) {
     struct msghdr *mh = &((struct mmsghdr *) msgvec)[index].msg_hdr;
     for (struct cmsghdr *cmsg = CMSG_FIRSTHDR(mh); cmsg != NULL; cmsg = CMSG_NXTHDR(mh, cmsg)) {
         // ipv6 or ipv4
+#if defined(IP_PKTINFO)
         if (cmsg->cmsg_level == IPPROTO_IP && cmsg->cmsg_type == IP_PKTINFO) {
             struct in_pktinfo *pi = (struct in_pktinfo *) CMSG_DATA(cmsg);
             memcpy(ip, &pi->ipi_addr, 4);
             return 4;
         }
-
+#elif defined(IP_RECVDSTADDR)
+        if (cmsg->cmsg_level == IPPROTO_IP && cmsg->cmsg_type == IP_RECVDSTADDR) {
+            struct in_addr *addr = (struct in_addr *) CMSG_DATA(cmsg);
+            memcpy(ip, addr, 4);
+            return 4;
+        }
+#endif
         if (cmsg->cmsg_level == IPPROTO_IPV6 && cmsg->cmsg_type == IPV6_PKTINFO) {
             struct in6_pktinfo *pi6 = (struct in6_pktinfo *) CMSG_DATA(cmsg);
             memcpy(ip, &pi6->ipi6_addr, 16);
@@ -604,9 +611,15 @@ LIBUS_SOCKET_DESCRIPTOR bsd_create_udp_socket(const char *host, int port) {
     int enabled = 1;
     if (setsockopt(listenFd, IPPROTO_IPV6, IPV6_RECVPKTINFO, (void *) &enabled, sizeof(enabled)) == -1) {
         if (errno == 92) {
+#if defined(IP_PKTINFO)
             if (setsockopt(listenFd, IPPROTO_IP, IP_PKTINFO, (void *) &enabled, sizeof(enabled)) != 0) {
                 printf("Error setting IPv4 pktinfo!\n");
             }
+#elif defined(IP_RECVDSTADDR)
+            if (setsockopt(listenFd, IPPROTO_IP, IP_RECVDSTADDR, (void *) &enabled, sizeof(enabled)) != 0) {
+                printf("Error setting IPv4 recvpktinfo!\n");
+            }
+#endif
         } else {
             printf("Error setting IPv6 pktinfo!\n");
         }

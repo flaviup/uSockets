@@ -1,6 +1,11 @@
-# By default we use LTO, but Windows does not support it
-ifneq ($(WITH_LTO),0)
-	override CFLAGS += -flto
+detected_OS := $(shell uname -s)
+
+ifneq ($(detected_OS),FreeBSD)
+	# By default we use LTO, but Windows does not support it
+	ifneq ($(WITH_LTO),0)
+		override CFLAGS += -flto
+		override CXXFLAGS += -flto
+	endif
 endif
 
 # WITH_BORINGSSL=1 enables BoringSSL support, linked statically (preferred over OpenSSL)
@@ -13,6 +18,7 @@ else
 	# For now we need to link with C++ for OpenSSL support, but should be removed with time
 	ifeq ($(WITH_OPENSSL),1)
 		override CFLAGS += -DLIBUS_USE_OPENSSL
+		override CXXFLAGS += -DLIBUS_USE_OPENSSL
 		# With problems on macOS, make sure to pass needed LDFLAGS required to find these
 		override LDFLAGS += -lssl -lcrypto -lstdc++
 	else
@@ -66,15 +72,15 @@ default:
 	$(CC) $(CFLAGS) -O3 -c src/*.c src/eventing/*.c src/crypto/*.c
 # Also link in Boost Asio support
 ifeq ($(WITH_ASIO),1)
-	$(CXX) $(CXXFLAGS) -Isrc -std=c++14 -flto -O3 -c src/eventing/asio.cpp
+	$(CXX) $(CXXFLAGS) -Isrc -std=c++14 -O3 -c src/eventing/asio.cpp
 endif
 
-# For now we do rely on C++17 for OpenSSL support but we will be porting this work to C11
+# For now we do rely on C++20 for OpenSSL support but we will be porting this work to C11
 ifeq ($(WITH_OPENSSL),1)
-	$(CXX) $(CXXFLAGS) -std=c++17 -flto -O3 -c src/crypto/*.cpp
+	$(CXX) $(CXXFLAGS) -std=c++20 -O3 -c src/crypto/*.cpp
 endif
 ifeq ($(WITH_BORINGSSL),1)
-	$(CXX) $(CXXFLAGS) -std=c++17 -flto -O3 -c src/crypto/*.cpp
+	$(CXX) $(CXXFLAGS) -std=c++20 -O3 -c src/crypto/*.cpp
 endif
 # Create a static library (try windows, then unix)
 	lib.exe /out:uSockets.a *.o || $(AR) rvs uSockets.a *.o

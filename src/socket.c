@@ -15,6 +15,8 @@
  * limitations under the License.
  */
 
+#ifndef LIBUS_USE_IO_URING
+
 #include "libusockets.h"
 #include "internal/internal.h"
 #include <stdlib.h>
@@ -144,6 +146,21 @@ void *us_socket_get_native_handle(int ssl, struct us_socket_t *s) {
     return (void *) (uintptr_t) us_poll_fd((struct us_poll_t *) s);
 }
 
+/* This is not available for SSL sockets as it makes no sense. */
+int us_socket_write2(int ssl, struct us_socket_t *s, const char *header, int header_length, const char *payload, int payload_length) {
+
+    if (us_socket_is_closed(ssl, s) || us_socket_is_shut_down(ssl, s)) {
+        return 0;
+    }
+
+    int written = bsd_write2(us_poll_fd(&s->p), header, header_length, payload, payload_length);
+    if (written != header_length + payload_length) {
+        us_poll_change(&s->p, s->context->loop, LIBUS_SOCKET_READABLE | LIBUS_SOCKET_WRITABLE);
+    }
+
+    return written < 0 ? 0 : written;
+}
+
 int us_socket_write(int ssl, struct us_socket_t *s, const char *data, int length, int msg_more) {
 #ifndef LIBUS_NO_SSL
     if (ssl) {
@@ -201,3 +218,5 @@ void us_socket_shutdown(int ssl, struct us_socket_t *s) {
         bsd_shutdown_socket(us_poll_fd((struct us_poll_t *) s));
     }
 }
+
+#endif
